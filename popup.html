@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Channel Timeline</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <span class="header-icon">📋</span>
+    <div>
+      <div class="header-title">Channel Timeline</div>
+      <div class="header-sub">Smart YouTube Playlist Builder</div>
+    </div>
+  </div>
+  <div class="header-version">v4.0</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="apikey">🔑 Key</button>
+  <button class="tab" data-tab="merger">🔗 Merge</button>
+  <button class="tab" data-tab="download">📥 Download</button>
+  <button class="tab" data-tab="history">📂 History</button>
+</div>
+
+<div class="tab-panel active" id="tab-apikey">
+  <div id="key-status-bar" class="key-status-bar hidden"></div>
+  <div class="field">
+    <label>YouTube Data API v3 Key</label>
+    <div class="input-row">
+      <input type="password" id="apikey-input" placeholder="AIzaSy… — saves automatically" autocomplete="off" />
+      <button class="icon-btn" id="toggle-visibility">👁</button>
+    </div>
+    <div class="key-hint">Key is saved automatically as you type</div>
+  </div>
+  <button class="btn-outline full mt8" id="test-key-btn">⚡ Test Key</button>
+  <div class="guide-box">
+    <div class="guide-title">📖 How to get a free API key</div>
+    <div class="guide-steps">
+      <div class="guide-step"><span class="step-num">1</span><span>Click the button below — opens the right page directly</span></div>
+      <div class="guide-step"><span class="step-num">2</span><span>Click <b>Enable</b> to activate the API</span></div>
+      <div class="guide-step"><span class="step-num">3</span><span>Click <b>Create Credentials → API Key</b></span></div>
+      <div class="guide-step"><span class="step-num">4</span><span>Copy the key and paste it above — it saves on its own</span></div>
+    </div>
+    <a class="btn-outline full mt8 link-btn" href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">🔗 Open Google Cloud Console</a>
+  </div>
+  <div class="how-box">
+    <div class="guide-title">🚀 How to use</div>
+    <ol class="how-list">
+      <li>Paste your API Key above — saves automatically</li>
+      <li>Open any YouTube channel</li>
+      <li>Click <b>⚙️ Settings</b> next to the Subscribe button</li>
+      <li>Set your filters and click Save</li>
+      <li>Click <b>📋 Playlist</b> to load all videos</li>
+      <li>Select videos, name your playlist, click <b>Create Playlist</b></li>
+      <li>Copy and save the link — it is your only access point</li>
+    </ol>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-merger">
+  <div class="merger-intro">
+    Paste YouTube playlist or video links and merge them into one playable link.
+    <span class="merger-intro-tip">The panel stays open — click ✖ to close it.</span>
+  </div>
+  <div class="field">
+    <label>Add a playlist or video link</label>
+    <div class="input-row">
+      <input type="text" id="merger-input" placeholder="https://youtube.com/playlist?list=…" />
+      <button class="icon-btn green" id="merger-add-btn" title="Add link">➕</button>
+    </div>
+  </div>
+  <div id="merger-list" class="merger-list"></div>
+  <div class="field mt8" id="merger-name-wrap" style="display:none">
+    <label>Merged playlist name</label>
+    <input type="text" id="merger-name" placeholder="My Merged Playlist" />
+  </div>
+  <button class="btn-primary full mt8" id="merge-btn" disabled>⚡ Merge &amp; Create Link</button>
+
+  <div id="merger-result" class="merger-result-overlay hidden">
+    <div class="merger-result-card">
+      <div class="mr-top">
+        <div class="mr-title">✅ Link is ready!</div>
+        <button class="mr-close" id="mr-close-btn">✖</button>
+      </div>
+      <div class="mr-warning">⚠️ Save this link now — it is the only way to access your playlist</div>
+      <div class="mr-url-row">
+        <input type="text" id="result-url" readonly />
+        <button class="icon-btn" id="copy-result-btn">📋</button>
+      </div>
+      <a class="btn-primary full mt8 mr-open" id="open-result-btn" href="#" target="_blank">▶️ Open Playlist</a>
+    </div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-download">
+  <div class="dl-intro">Full guide to downloading YouTube playlists and channels using yt-dlp and PowerShell.</div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Step 1 — Install yt-dlp</div>
+    <div class="dl-step">Open PowerShell as Administrator and run:</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-install-ytdlp">winget install yt-dlp</code>
+      <button class="dl-copy-btn" data-target="cmd-install-ytdlp">📋</button>
+    </div>
+    <div class="dl-step">Or download the .exe from <a href="https://github.com/yt-dlp/yt-dlp/releases/latest" target="_blank">github.com/yt-dlp</a> and place it in <b>C:\Windows\System32</b></div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Step 2 — Install ffmpeg (required for best quality)</div>
+    <div class="dl-step">Run in PowerShell:</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-install-ffmpeg">winget install Gyan.FFmpeg</code>
+      <button class="dl-copy-btn" data-target="cmd-install-ffmpeg">📋</button>
+    </div>
+    <div class="dl-step">Restart PowerShell, then verify:</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-verify">ffmpeg -version</code>
+      <button class="dl-copy-btn" data-target="cmd-verify">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Download — Best Quality (1080p)</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-best">yt-dlp -f "bestvideo[height&lt;=1080]+bestaudio/best" --merge-output-format mp4 "PASTE_LINK_HERE"</code>
+      <button class="dl-copy-btn" data-target="cmd-best">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Download — Full Playlist</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-playlist">yt-dlp -f "bestvideo[height&lt;=1080]+bestaudio/best" --merge-output-format mp4 -o "%(playlist_index)s - %(title)s.%(ext)s" "PASTE_PLAYLIST_LINK"</code>
+      <button class="dl-copy-btn" data-target="cmd-playlist">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Download — Full Channel</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-channel">yt-dlp -f "bestvideo[height&lt;=1080]+bestaudio/best" --merge-output-format mp4 -o "%(uploader)s/%(title)s.%(ext)s" "https://youtube.com/@CHANNEL_NAME"</code>
+      <button class="dl-copy-btn" data-target="cmd-channel">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Download — Audio Only (MP3)</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-audio">yt-dlp -x --audio-format mp3 --audio-quality 0 "PASTE_LINK_HERE"</code>
+      <button class="dl-copy-btn" data-target="cmd-audio">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Download — From Timestamp to Timestamp</div>
+    <div class="dl-step">Replace 00:01:00 and 00:05:00 with your start and end times:</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-range">yt-dlp --download-sections "*00:01:00-00:05:00" "PASTE_LINK_HERE"</code>
+      <button class="dl-copy-btn" data-target="cmd-range">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Quality options</div>
+    <div class="dl-step">4K:</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-4k">yt-dlp -f "bestvideo[height&lt;=2160]+bestaudio/best" --merge-output-format mp4 "LINK"</code>
+      <button class="dl-copy-btn" data-target="cmd-4k">📋</button>
+    </div>
+    <div class="dl-step mt4">720p:</div>
+    <div class="dl-code-wrap mt4">
+      <code id="cmd-720">yt-dlp -f "bestvideo[height&lt;=720]+bestaudio/best" --merge-output-format mp4 "LINK"</code>
+      <button class="dl-copy-btn" data-target="cmd-720">📋</button>
+    </div>
+    <div class="dl-step mt4">480p:</div>
+    <div class="dl-code-wrap mt4">
+      <code id="cmd-480">yt-dlp -f "bestvideo[height&lt;=480]+bestaudio/best" --merge-output-format mp4 "LINK"</code>
+      <button class="dl-copy-btn" data-target="cmd-480">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Save to a specific folder</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-folder">yt-dlp -o "C:\Downloads\%(title)s.%(ext)s" "PASTE_LINK_HERE"</code>
+      <button class="dl-copy-btn" data-target="cmd-folder">📋</button>
+    </div>
+  </div>
+
+  <div class="dl-section">
+    <div class="dl-section-title">Skip already downloaded files</div>
+    <div class="dl-code-wrap">
+      <code id="cmd-skip">yt-dlp --download-archive downloaded.txt "PASTE_PLAYLIST_LINK"</code>
+      <button class="dl-copy-btn" data-target="cmd-skip">📋</button>
+    </div>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-history">
+  <div class="history-toolbar">
+    <span id="history-count" class="history-count">0 playlists</span>
+    <div style="display:flex;gap:6px;">
+      <button class="btn-sm" id="export-history-btn">📥 Export</button>
+      <button class="btn-sm danger" id="clear-history-btn">🗑 Clear All</button>
+    </div>
+  </div>
+  <div id="history-list" class="history-list">
+    <div class="empty-state">📭 No playlists saved yet</div>
+  </div>
+</div>
+
+<div class="footer">Channel Timeline v4.0 &nbsp;·&nbsp; Free &nbsp;·&nbsp; Private</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
+
