@@ -184,3 +184,82 @@ $p('merge-btn').addEventListener('click', async () => {
     await saveHistory({ name, url, count: allIds.length, type: 'merger', date: new Date().toLocaleDateString('en-GB'), sources: mergerLinks.map(l => l.url) });
     renderHistory();
 });
+
+document.querySelectorAll('.dl-copy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const code = document.getElementById(btn.dataset.target);
+        if (!code) return;
+        navigator.clipboard.writeText(code.textContent);
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '📋'; }, 2000);
+    });
+});
+
+async function loadHistory() {
+    const d = await store.get('ct_history_global');
+    return d.ct_history_global || [];
+}
+
+async function saveHistory(entry) {
+    let h = await loadHistory();
+    h.unshift({ ...entry, id: Date.now() });
+    if (h.length > 200) h = h.slice(0, 200);
+    await store.set({ ct_history_global: h });
+}
+
+async function renderHistory() {
+    const list = await loadHistory();
+    const el = $p('history-list');
+    $p('history-count').textContent = list.length + ' playlist' + (list.length !== 1 ? 's' : '');
+    if (!list.length) { el.innerHTML = '<div class="empty-state">📭 No playlists saved yet</div>'; return; }
+    el.innerHTML = list.map(item => `
+    <div class="history-item">
+      <div class="history-item-name">${esc(item.name)}</div>
+      <div class="history-item-meta">${item.type === 'merger' ? '🔗 Merged' : '📋 Channel'} · ${item.count} videos · ${item.date}</div>
+      <div class="history-item-url">${esc(item.url)}</div>
+      <div class="history-item-actions">
+        <a class="btn-open" href="${esc(item.url)}" target="_blank">▶️ Open</a>
+        <button class="btn-copy-url" data-url="${esc(item.url)}">📋 Copy</button>
+        <button class="btn-delete" data-id="${item.id}">🗑</button>
+      </div>
+    </div>`).join('');
+
+    el.querySelectorAll('.btn-copy-url').forEach(btn => {
+        btn.addEventListener('click', () => {
+            navigator.clipboard.writeText(btn.dataset.url);
+            btn.textContent = '✅';
+            setTimeout(() => { btn.textContent = '📋 Copy'; }, 2000);
+        });
+    });
+    el.querySelectorAll('.btn-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            let h = await loadHistory();
+            h = h.filter(x => x.id !== +btn.dataset.id);
+            await store.set({ ct_history_global: h });
+            renderHistory();
+        });
+    });
+}
+
+$p('export-history-btn').addEventListener('click', async () => {
+    const list = await loadHistory();
+    if (!list.length) { alert('No playlists to export'); return; }
+    const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'channel-timeline-history-' + Date.now() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+});
+
+$p('clear-history-btn').addEventListener('click', async () => {
+    if (!confirm('Clear all saved playlists?')) return;
+    await store.del('ct_history_global');
+    renderHistory();
+});
+
+renderHistory();
+
+function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
