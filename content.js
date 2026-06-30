@@ -207,3 +207,95 @@ CT.hideWatchExtras = function() {
   shorts.forEach(function(el) { el.style.display = 'none'; });
 };
 
+CT.injectVideoControls = function() {
+  if (document.getElementById('ct-video-controls')) return;
+
+  var below = document.querySelector('ytd-video-primary-info-renderer, #above-the-fold');
+  if (!below) return;
+
+  var ctrl = document.createElement('div');
+  ctrl.id = 'ct-video-controls';
+
+  ctrl.innerHTML = '<button class="ct-vc-btn" id="ct-toggle-desc" title="Toggle description">'
+    + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>'
+    + '</button>'
+    + '<button class="ct-vc-btn" id="ct-toggle-comments" title="Toggle comments">'
+    + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
+    + '</button>'
+    + '<span class="ct-vc-label">Best option</span>';
+
+  below.parentNode.insertBefore(ctrl, below.nextSibling);
+
+  var descVisible = false;
+  var commVisible = false;
+
+  document.getElementById('ct-toggle-desc').addEventListener('click', function() {
+    var desc = document.querySelector('ytd-video-secondary-info-renderer #description, ytd-expander');
+    if (!desc) return;
+    descVisible = !descVisible;
+    desc.style.display = descVisible ? '' : 'none';
+    this.classList.toggle('ct-vc-active', descVisible);
+  });
+
+  document.getElementById('ct-toggle-comments').addEventListener('click', function() {
+    var comments = document.querySelector('ytd-comments, #comments');
+    if (!comments) return;
+    commVisible = !commVisible;
+    comments.style.display = commVisible ? '' : 'none';
+    this.classList.toggle('ct-vc-active', commVisible);
+  });
+};
+
+CT.handleChannel = function() {
+  var handle = CT.getHandle();
+  if (!handle) return;
+  if (CT.channelId !== handle) {
+    CT.channelId   = handle;
+    CT.allVideos   = [];
+    CT.injected    = false;
+  }
+  if (CT.injected) return;
+  CT.channelName = document.querySelector('#channel-name, ytd-channel-name yt-formatted-string')?.textContent?.trim() || handle;
+  CT.injected    = true;
+  CT.loadSettings().then(function() { CT.injectChannelBtns(); });
+};
+
+CT.getHandle = function() {
+  var m = location.pathname.match(/\/@([^/?]+)/) || location.pathname.match(/\/channel\/([^/?]+)/);
+  return m ? m[1] : null;
+};
+
+CT.injectChannelBtns = function() {
+  document.querySelector('.ct-wrap')?.remove();
+  var target = document.querySelector('#subscribe-button, ytd-subscribe-button-renderer');
+  if (!target) { setTimeout(function() { CT.injectChannelBtns(); }, 1000); return; }
+  var wrap = document.createElement('div');
+  wrap.className = 'ct-wrap';
+  var b1 = document.createElement('button');
+  b1.textContent = '📋 Playlist';
+  b1.className   = 'ct-pl-btn';
+  b1.addEventListener('click', CT.onPlaylistClick.bind(CT));
+  var b2 = document.createElement('button');
+  b2.textContent = '⚙️ Settings';
+  b2.className   = 'ct-st-btn';
+  b2.addEventListener('click', function() { CT.openSettings(false); });
+  wrap.appendChild(b1);
+  wrap.appendChild(b2);
+  target.parentNode.insertBefore(wrap, target);
+};
+
+CT.onPlaylistClick = async function() {
+  var key = await CT.getKey();
+  if (!key) { CT.toast('❌ Add your API Key from the extension icon', 5000); return; }
+  var s = CT.settings;
+  var hasFilters = (s.years && s.years.length > 0)
+    || (s.months && s.months.length > 0)
+    || (s.keywords && s.keywords.trim())
+    || (s.excludeWords && s.excludeWords.trim())
+    || (s.types && s.types.length < 3)
+    || +s.minDuration > 0 || +s.maxDuration > 0;
+  if (!hasFilters) { CT.openSettings(true); return; }
+  if (CT.allVideos.length > 0) { CT.openModal(); return; }
+  CT.fetchAll();
+};
+
