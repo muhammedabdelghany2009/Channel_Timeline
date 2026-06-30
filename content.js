@@ -107,3 +107,103 @@ CT.filterSearchToChannels = function() {
   shorts.forEach(function(el) { el.style.display = 'none'; });
 };
 
+CT.handleSubscriptions = function() {
+  setTimeout(function() {
+    CT.hideSubsShorts();
+    CT.injectSubsFilter();
+  }, 700);
+};
+
+CT.hideSubsShorts = function() {
+  var items = document.querySelectorAll('ytd-rich-item-renderer, ytd-grid-video-renderer');
+  items.forEach(function(item) {
+    var link = item.querySelector('a[href]');
+    if (link && link.href && link.href.indexOf('/shorts/') !== -1) {
+      item.style.display = 'none';
+    }
+  });
+  var shelves = document.querySelectorAll('ytd-reel-shelf-renderer, ytd-rich-section-renderer');
+  shelves.forEach(function(el) { el.style.display = 'none'; });
+};
+
+CT.injectSubsFilter = function() {
+  if (document.getElementById('ct-subs-filter')) return;
+
+  var nav = document.querySelector('ytd-feed-filter-chip-bar-renderer, #chips-wrapper, yt-chip-cloud-renderer');
+  if (!nav) return;
+
+  var bar = document.createElement('div');
+  bar.id = 'ct-subs-filter';
+
+  bar.innerHTML = '<div class="ct-filter-row">'
+    + '<button class="ct-filter-btn ct-active" data-period="all">All</button>'
+    + '<button class="ct-filter-btn" data-period="7">Last 7 days</button>'
+    + '<button class="ct-filter-btn" data-period="14">Last 2 weeks</button>'
+    + '<button class="ct-filter-btn" data-period="30">Last month</button>'
+    + '<div class="ct-filter-sep"></div>'
+    + '<label class="ct-filter-check"><input type="checkbox" id="ct-show-posts" /> Posts</label>'
+    + '</div>';
+
+  nav.parentNode.insertBefore(bar, nav.nextSibling);
+
+  bar.querySelectorAll('.ct-filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      bar.querySelectorAll('.ct-filter-btn').forEach(function(b) { b.classList.remove('ct-active'); });
+      btn.classList.add('ct-active');
+      CT.applySubsFilter(btn.dataset.period);
+    });
+  });
+};
+
+CT.applySubsFilter = function(period) {
+  var items = document.querySelectorAll('ytd-rich-item-renderer');
+  var now   = Date.now();
+  var days  = period === 'all' ? 0 : parseInt(period);
+
+  items.forEach(function(item) {
+    var link = item.querySelector('a[href]');
+    if (link && link.href && link.href.indexOf('/shorts/') !== -1) {
+      item.style.display = 'none';
+      return;
+    }
+    if (days === 0) { item.style.display = ''; return; }
+    var timeEl = item.querySelector('ytd-video-meta-block #metadata-line span:last-child, span.ytd-video-meta-block');
+    if (!timeEl) { item.style.display = ''; return; }
+    var txt  = timeEl.textContent.trim().toLowerCase();
+    var pass = CT.timeTextWithinDays(txt, days);
+    item.style.display = pass ? '' : 'none';
+  });
+};
+
+CT.timeTextWithinDays = function(txt, days) {
+  var n = parseInt(txt);
+  if (isNaN(n)) return true;
+  if (txt.indexOf('hour') !== -1 || txt.indexOf('minute') !== -1) return true;
+  if (txt.indexOf('day') !== -1)   return n <= days;
+  if (txt.indexOf('week') !== -1)  return n * 7 <= days;
+  if (txt.indexOf('month') !== -1) return false;
+  if (txt.indexOf('year') !== -1)  return false;
+  return true;
+};
+
+CT.handleWatch = function() {
+  setTimeout(function() {
+    CT.hideWatchExtras();
+    CT.injectVideoControls();
+  }, 900);
+};
+
+CT.hideWatchExtras = function() {
+  var sidebar = document.querySelector('#secondary, #related');
+  if (sidebar) sidebar.style.display = 'none';
+
+  var desc = document.querySelector('ytd-video-secondary-info-renderer #description, ytd-expander');
+  if (desc) desc.style.display = 'none';
+
+  var comments = document.querySelector('ytd-comments, #comments');
+  if (comments) comments.style.display = 'none';
+
+  var shorts = document.querySelectorAll('ytd-reel-shelf-renderer, ytd-rich-section-renderer');
+  shorts.forEach(function(el) { el.style.display = 'none'; });
+};
+
