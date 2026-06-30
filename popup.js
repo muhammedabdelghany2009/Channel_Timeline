@@ -55,4 +55,132 @@ function showSt(msg, type) {
     statusBar.className = 'key-status-bar ' + type;
     if (type === 'ok') setTimeout(() => statusBar.classList.add('hidden'), 2000);
 }
+let mergerLinks = [];
+const mergerInput = $p('merger-input');
+const mergerList = $p('merger-list');
+const mergeBtn = $p('merge-btn');
+const mergerRes = $p('merger-result');
 
+$p('merger-add-btn').addEventListener('click', addLink);
+mergerInput.addEventListener('keydown', e => { if (e.key === 'Enter') addLink(); });
+
+async function addLink() {
+    const raw = mergerInput.value.trim();
+    if (!raw) return;
+    const parsed = parseYtUrl(raw);
+    if (!parsed) { showMErr('❌ Invalid link — paste a YouTube playlist or video URL'); return; }
+    if (mergerLinks.find(l => l.url === raw)) { showMErr('⚠️ This link is already in the list'); return; }
+    mergerLinks.push({ url: raw, ...parsed });
+    mergerInput.value = '';
+    renderMerger();
+}
+
+function parseYtUrl(url) {
+    try {
+        const u = new URL(url);
+        const listId = u.searchParams.get('list');
+        if (listId) return { type: 'playlist', id: listId, label: 'Playlist: ' + listId.slice(0, 16) + '…' };
+        let vid = u.searchParams.get('v');
+        if (!vid && u.hostname === 'youtu.be') vid = u.pathname.slice(1);
+        if (vid) return { type: 'video', id: vid, label: 'Video: ' + vid };
+    } catch { }
+    return null;
+}
+
+function showMErr(msg) {
+    document.querySelector('.merger-err')?.remove();
+    const e = document.createElement('div');
+    e.style.cssText = 'color:#ef5350;font-size:11px;margin-top:4px;padding:4px 6px;background:#2a1515;border-radius:5px;';
+    e.textContent = msg;
+    e.className = 'merger-err';
+    mergerInput.closest('.field').appendChild(e);
+    setTimeout(() => e.remove(), 3000);
+}
+
+function renderMerger() {
+    mergerList.innerHTML = '';
+    mergerLinks.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.className = 'merger-item';
+        div.innerHTML = '<span class="merger-item-icon">' + (item.type === 'playlist' ? '📋' : '▶️') + '</span>'
+            + '<span class="merger-item-label">' + esc(item.label) + '</span>'
+            + '<span class="merger-item-count" id="mc-' + idx + '">…</span>'
+            + '<button class="merger-item-del" data-idx="' + idx + '">✕</button>';
+        mergerList.appendChild(div);
+    });
+
+    mergerList.querySelectorAll('.merger-item-del').forEach(btn => {
+        btn.addEventListener('click', () => {
+            mergerLinks.splice(+btn.dataset.idx, 1);
+            renderMerger();
+        });
+    });
+
+    const has = mergerLinks.length > 0;
+    mergeBtn.disabled = !has;
+    $p('merger-name-wrap').style.display = has ? 'block' : 'none';
+    mergerRes.classList.add('hidden');
+    if (has) resolveCounts();
+}
+
+async function resolveCounts() {
+    const key = (await store.get('ct_api_key')).ct_api_key || '';
+    for (let i = 0; i < mergerLinks.length; i++) {
+        const item = mergerLinks[i];
+        const el = $p('mc-' + i);
+        if (!el) continue;
+        try {
+            if (item.type === 'video') {
+                item.videoIds = [item.id];
+                el.textContent = '1 video';
+            } else if (item.type === 'playlist' && key) {
+                const ids = await fetchPlIds(key, item.id);
+                item.videoIds = ids;
+                el.textContent = ids.length + ' videos';
+            } else {
+                el.textContent = key ? '?' : 'Need API Key';
+            }
+        } catch { el.textContent = 'Error'; }
+    }
+}
+
+async function fetchPlIds(key, plId) {
+    const ids = [];
+    let token = '';
+    do {
+        const r = await fetch('https://googleapis.com' + plId + '&maxResults=50&pageToken=' + token + '&key=' + key);
+        const d = await r.json();
+        if (d.error) throw new Error(d.error.message);
+        for (const item of (d.items || [])) {
+            const vid = item.snippet?.resourceId?.videoId;
+            if (vid) ids.push(vid);
+        }
+        token = d.nextPageToken || '';
+    } while (token);
+    return ids;
+}
+
+$p('merge-btn').addEventListener('click', async () => {
+    let allIds = [];
+    for (const item of mergerLinks) {
+        if (item.videoIds?.length) allIds = allIds.concat(item.videoIds);
+    }
+    allIds = [...new Set(allIds)];
+    if (!allIds.length) { showMErr('❌ No videos found — save your API Key first'); return; }
+
+    const name = $p('merger-name').value.trim() || 'Merged Playlist';
+    const url = 'https://youtube.com' + allIds.join(',') + '&title=' + encodeURIComponent(name);
+
+    $p('result-url').value = url;
+    $p('open-result-btn').href = url;
+    mergerRes.classList.remove('hidden');
+
+    $p('copy-result-btn').onclick = () => {
+        navigator.clipboard.writeText(url);
+        $p('copy-result-btn').textContent = '✅';
+        setTimeout(() => { $p('copy-result-btn').textContent = '📋'; }, 2000);
+    };
+
+    await saveHistory({ name, url, count: allIds.length, type: 'merger', date: new Date().toLocaleDateString('en-GB'), sources: mergerLinks.map(l => l.url) });
+    renderHistory();
+});
