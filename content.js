@@ -299,3 +299,85 @@ CT.onPlaylistClick = async function() {
   CT.fetchAll();
 };
 
+CT.fetchAll = async function() {
+  var key = await CT.getKey();
+  var btn = document.querySelector('.ct-pl-btn');
+  if (btn) { btn.textContent = '⏳ Loading…'; btn.disabled = true; }
+  try {
+    var cid = await CT.resolveId(key);
+    if (!cid) throw new Error('Could not identify this channel');
+    CT.allVideos = await CT.fetchVideos(key, cid);
+    if (btn) { btn.textContent = '📋 Playlist (' + CT.allVideos.length + ')'; btn.disabled = false; }
+    CT.openModal();
+  } catch(e) {
+    CT.toast('❌ ' + e.message, 5000);
+    if (btn) { btn.textContent = '📋 Playlist'; btn.disabled = false; }
+  }
+};
+
+CT.resolveId = async function(key) {
+  var meta = document.querySelector('meta[itemprop="channelId"]');
+  if (meta) return meta.content;
+  var handle = CT.getHandle();
+  if (!handle) return null;
+  var r = await fetch('https://googleapis.com' + encodeURIComponent(handle) + '&key=' + key);
+  var d = await r.json();
+  if (d.items && d.items[0]) return d.items[0].id;
+  r = await fetch('https://googleapis.com' + encodeURIComponent(handle) + '&key=' + key);
+  d = await r.json();
+  return d.items && d.items[0] ? d.items[0].id : null;
+};
+
+CT.fetchVideos = async function(key, cid) {
+  var chR = await fetch('https://googleapis.com' + cid + '&key=' + key);
+  var chD = await chR.json();
+  if (chD.error) throw new Error(chD.error.message);
+  CT.channelName = (chD.items && chD.items[0] && chD.items[0].snippet.title) || CT.channelName;
+  var uploadsId  = chD.items && chD.items[0] && chD.items[0].contentDetails.relatedPlaylists.uploads;
+  if (!uploadsId) throw new Error('Could not find the uploads playlist');
+
+  var raw = [], token = '', page = 0;
+  do {
+    page++;
+    CT.toast('⏳ Fetching page ' + page + ' (' + raw.length + ' videos)…');
+    var url = 'https://googleapis.com' + uploadsId + '&maxResults=50&pageToken=' + token + '&key=' + key;
+    var r = await fetch(url);
+    var d = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    (d.items || []).forEach(function(item) {
+      var sn = item.snippet;
+      if (sn.title === 'Private video' || sn.title === 'Deleted video') return;
+      raw.push({ id: sn.resourceId.videoId, title: sn.title, publishedAt: sn.publishedAt, thumbnail: (sn.thumbnails.medium || sn.thumbnails.default || {}).url || '' });
+    });
+    token = d.nextPageToken || '';
+  } while (token);
+
+  var videos = [];
+  for (var i = 0; i < raw.length; i += 50) {
+    CT.toast('⏳ Loading details ' + (i+1) + '–' + Math.min(i+50, raw.length) + ' / ' + raw.length + '…');
+    var ids = raw.slice(i, i+50).map(function(v) { return v.id; }).join(',');
+    var url2 = 'https://googleapis.com' + ids + '&key=' + key;
+    var r2 = await fetch(url2);
+    var d2 = await r2.json();
+    if (d2.error) throw new Error(d2.error.message);
+    (d2.items || []).forEach(function(item) {
+      var rv = raw.find(function(x) { return x.id === item.id; });
+      if (!rv) return;
+      var secs    = CT.parseDur(item.contentDetails.duration || 'PT0S');
+      var lt      = item.snippet.liveBroadcastContent;
+      var noStats = !item.statistics;
+      var type    = 'video';
+      if (lt === 'live' || lt === 'completed') type = 'live';
+      else if (secs > 0 && secs <= 62)         type = 'short';
+      else if (noStats)                         type = 'member';
+      videos.push(Object.assign({}, rv, {
+        type: type, duration: secs, durationStr: CT.fmtDur(secs),
+        views: +(item.statistics && item.statistics.viewCount || 0),
+        likes: +(item.statistics && item.statistics.likeCount || 0),
+        description: item.snippet.description || ''
+      }));
+    });
+  }
+  return videos;
+};
+
