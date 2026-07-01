@@ -470,3 +470,76 @@ CT.openModal = function() {
   CT.el('ct-export-btn').onclick = function() { CT.exportCsv(); };
 };
 
+
+
+CT.videoRow = function(v, i) {
+  var icon  = v.type === 'live' ? '🔴' : v.type === 'short' ? '📱' : '▶️';
+  var date  = new Date(v.publishedAt).toLocaleDateString('en-GB');
+  var views = CT.fmtNum(v.views);
+  return '<div class="ct-vrow" data-id="' + v.id + '">'
+    + '<input type="checkbox" class="ct-chk" checked data-idx="' + i + '" />'
+    + '<img class="ct-thumb" src="' + v.thumbnail + '" loading="lazy" />'
+    + '<div class="ct-vinfo">'
+    + '<div class="ct-vtitle">' + CT.esc(v.title) + '</div>'
+    + '<div class="ct-vmeta">' + icon + ' ' + date + ' · ' + v.durationStr + ' · ' + views + ' views</div>'
+    + '</div></div>';
+};
+
+CT.membersSection = function(members) {
+  return '<div class="ct-members-sec">'
+    + '<div class="ct-members-title">👑 Members-only (' + members.length + ') — count only</div>'
+    + members.map(function(v) {
+      return '<div class="ct-vrow ct-mrow">'
+        + '<span class="ct-mlock">🔒</span>'
+        + '<img class="ct-thumb" src="' + v.thumbnail + '" loading="lazy" />'
+        + '<div class="ct-vinfo"><div class="ct-vtitle">' + CT.esc(v.title) + '</div>'
+        + '<div class="ct-vmeta ct-mtag">👑 Members only</div></div></div>';
+    }).join('')
+    + '</div>';
+};
+
+CT.historyHTML = function() {
+  return '<div class="ct-hist"><div class="ct-hist-title">📂 Previous Playlists</div>'
+    + CT.history.map(function(h) {
+      return '<div class="ct-hist-row">'
+        + '<a href="' + h.url + '" target="_blank">' + CT.esc(h.name) + '</a>'
+        + '<span class="ct-badge">' + h.count + '</span>'
+        + '<span class="ct-hist-date">' + h.date + '</span>'
+        + '</div>';
+    }).join('') + '</div>';
+};
+
+CT.createPlaylist = function() {
+  var chosen = CT.getChecked();
+  if (!chosen.length) { CT.toast('❌ No videos selected'); return; }
+  var name = (CT.el('ct-pl-name') || {}).value || CT.channelName + ' — Timeline';
+  var ids  = chosen.map(function(v) { return v.id; });
+  var url  = 'https://youtube.com' + ids.join(',') + '&title=' + encodeURIComponent(name.trim());
+  CT.showResult(url, name.trim(), ids.length);
+  CT.pushHistory({ name: name.trim(), url: url, count: ids.length, date: new Date().toLocaleDateString('en-GB'), channelId: CT.channelId });
+};
+
+CT.showResult = function(url, name, count) {
+  CT.closeModal('ct-res-modal');
+  var modal = document.createElement('div');
+  modal.id  = 'ct-res-modal';
+  modal.innerHTML = '<div class="ct-box ct-res-box">'
+    + '<div class="ct-hdr"><span>✅ Playlist ready!</span>'
+    + '<button class="ct-ico-btn" id="ct-close-res">✖</button></div>'
+    + '<div class="ct-body">'
+    + '<div class="ct-res-name">' + CT.esc(name) + '</div>'
+    + '<div class="ct-res-count">📊 ' + count + ' videos</div>'
+    + '<div class="ct-res-warn">⚠️ <strong>Save this link now.</strong><br>It is the only way to access this playlist later.</div>'
+    + '<div class="ct-res-url-wrap"><input type="text" id="ct-res-url" value="' + CT.esc(url) + '" readonly />'
+    + '<button class="ct-ico-btn" id="ct-copy-res">📋</button></div>'
+    + '<a class="ct-primary-btn ct-open-btn" href="' + CT.esc(url) + '" target="_blank">▶️ Open Playlist</a>'
+    + '</div></div>';
+  document.body.appendChild(modal);
+  CT.el('ct-close-res').onclick = function() { modal.remove(); };
+  CT.el('ct-copy-res').onclick  = function() {
+    navigator.clipboard.writeText(url);
+    CT.el('ct-copy-res').textContent = '✅';
+    setTimeout(function() { CT.el('ct-copy-res').textContent = '📋'; }, 2000);
+  };
+};
+
