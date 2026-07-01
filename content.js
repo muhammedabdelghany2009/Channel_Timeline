@@ -647,3 +647,74 @@ CT.saveSettings = async function (s) {
   await CT.cSet(obj);
 };
 
+CT.pushHistory = async function(entry) {
+  CT.history.unshift(entry);
+  if (CT.history.length > 50) CT.history = CT.history.slice(0, 50);
+  var obj1 = {}, obj2 = {};
+  obj1['ct_h_' + CT.channelId] = CT.history;
+  await CT.cSet(obj1);
+  var d  = await CT.cGet('ct_history_global');
+  var gh = d['ct_history_global'] || [];
+  gh.unshift(Object.assign({}, entry, { id: Date.now(), type: 'channel' }));
+  if (gh.length > 200) gh.splice(200);
+  obj2['ct_history_global'] = gh;
+  await CT.cSet(obj2);
+};
+
+CT.calcStats = function(videos) {
+  if (!videos.length) return { totalHours: '0', avgViews: '0', topMonth: '—' };
+  var secs = videos.reduce(function(a, v) { return a + v.duration; }, 0);
+  var totalHours = (secs / 3600).toFixed(1);
+  var avgViews   = CT.fmtNum(Math.round(videos.reduce(function(a, v) { return a + v.views; }, 0) / videos.length));
+  var mc = {};
+  videos.forEach(function(v) {
+    var k = new Date(v.publishedAt).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    mc[k] = (mc[k] || 0) + 1;
+  });
+  var topMonth = Object.entries(mc).sort(function(a, b) { return b[1] - a[1]; })[0];
+  return { totalHours: totalHours, avgViews: avgViews, topMonth: topMonth ? topMonth[0] : '—' };
+};
+
+CT.setChecks = function(val) {
+  document.querySelectorAll('.ct-chk').forEach(function(c) {
+    if (c.closest('.ct-vrow').style.display !== 'none') c.checked = val;
+  });
+};
+CT.updateCount = function() {
+  var n  = document.querySelectorAll('.ct-chk:checked').length;
+  var el = CT.el('ct-sel-count');
+  if (el) el.textContent = n + ' selected';
+};
+CT.getChecked = function() {
+  return Array.from(document.querySelectorAll('.ct-chk:checked')).map(function(c) {
+    return CT.filtered[+c.dataset.idx];
+  }).filter(Boolean);
+};
+CT.parseDur = function(iso) {
+  var m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return (+(m[1]||0))*3600 + (+(m[2]||0))*60 + (+(m[3]||0));
+};
+CT.fmtDur = function(s) {
+  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  return h > 0 ? h+':'+CT.pad(m)+':'+CT.pad(sec) : m+':'+CT.pad(sec);
+};
+CT.pad    = function(n) { return String(n).padStart(2,'0'); };
+CT.fmtNum = function(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(n); };
+CT.getKey = async function() { var d = await CT.cGet('ct_api_key'); return d.ct_api_key || ''; };
+CT.closeModal = function(id) { var el = document.getElementById(id); if (el) el.remove(); };
+CT.el    = function(id) { return document.getElementById(id); };
+CT.toast = function(msg, ms) {
+  var old = document.getElementById('ct-toast');
+  if (old) old.remove();
+  var t  = document.createElement('div');
+  t.id   = 'ct-toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function() { t.remove(); }, ms || 2500);
+};
+CT.cGet = function(key) { return new Promise(function(r) { chrome.storage.local.get(key, r); }); };
+CT.cSet = function(obj) { return new Promise(function(r) { chrome.storage.local.set(obj, r); }); };
+CT.esc  = function(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+};
+
