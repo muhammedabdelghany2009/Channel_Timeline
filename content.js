@@ -381,3 +381,92 @@ CT.fetchVideos = async function(key, cid) {
   return videos;
 };
 
+CT.applyFilters = function(videos) {
+  var members = videos.filter(function(v) { return v.type === 'member'; });
+  var regular = videos.filter(function(v) { return v.type !== 'member'; });
+  var s = CT.settings;
+  if (s.types && s.types.length && s.types.length < 3)
+    regular = regular.filter(function(v) { return s.types.indexOf(v.type) !== -1; });
+  if (s.years && s.years.length)
+    regular = regular.filter(function(v) { return s.years.indexOf(new Date(v.publishedAt).getFullYear()) !== -1; });
+  if (s.months && s.months.length)
+    regular = regular.filter(function(v) { return s.months.indexOf(new Date(v.publishedAt).getMonth() + 1) !== -1; });
+  if (s.keywords && s.keywords.trim()) {
+    var kws = s.keywords.toLowerCase().split(/[\s,]+/).filter(Boolean);
+    regular = regular.filter(function(v) { return kws.some(function(k) { return v.title.toLowerCase().indexOf(k) !== -1; }); });
+  }
+  if (s.excludeWords && s.excludeWords.trim()) {
+    var exs = s.excludeWords.toLowerCase().split(/[\s,]+/).filter(Boolean);
+    regular = regular.filter(function(v) { return !exs.some(function(k) { return v.title.toLowerCase().indexOf(k) !== -1; }); });
+  }
+  if (+s.minDuration > 0) regular = regular.filter(function(v) { return v.duration >= +s.minDuration * 60; });
+  if (+s.maxDuration > 0) regular = regular.filter(function(v) { return v.duration <= +s.maxDuration * 60; });
+  regular.sort(function(a, b) {
+    var da = new Date(a.publishedAt), db = new Date(b.publishedAt);
+    return s.order === 'oldest' ? da - db : db - da;
+  });
+  return { regular: regular, members: members };
+};
+
+CT.openModal = function() {
+  CT.closeModal('ct-pl-modal');
+  var res     = CT.applyFilters(CT.allVideos);
+  CT.filtered = res.regular;
+  var stats   = CT.calcStats(res.regular);
+
+  var modal = document.createElement('div');
+  modal.id  = 'ct-pl-modal';
+  modal.innerHTML = '<div class="ct-box ct-pl-box">'
+    + '<div class="ct-hdr"><span>📋 Channel Timeline — ' + CT.esc(CT.channelName) + '</span>'
+    + '<div style="display:flex;gap:8px;align-items:center">'
+    + '<button class="ct-ico-btn" id="ct-srch-toggle">🔍</button>'
+    + '<button class="ct-ico-btn" id="ct-close-pl">✖</button>'
+    + '</div></div>'
+    + '<div id="ct-srch-bar" class="ct-srch-bar ct-hidden"><input id="ct-srch-inp" type="text" placeholder="Search video titles…" /></div>'
+    + '<div class="ct-stats">'
+    + '<div class="ct-stat"><span class="ct-sn">' + res.regular.length + '</span><span class="ct-sl">Videos</span></div>'
+    + '<div class="ct-stat"><span class="ct-sn">' + stats.totalHours + 'h</span><span class="ct-sl">Total Time</span></div>'
+    + '<div class="ct-stat"><span class="ct-sn">' + stats.avgViews + '</span><span class="ct-sl">Avg Views</span></div>'
+    + '<div class="ct-stat"><span class="ct-sn">' + stats.topMonth + '</span><span class="ct-sl">Top Month</span></div>'
+    + '</div>'
+    + '<div class="ct-body">'
+    + '<div class="ct-row"><label>Playlist name:</label><input id="ct-pl-name" type="text" value="' + CT.esc(CT.channelName) + ' — Timeline" /></div>'
+    + '<div class="ct-sel-row">'
+    + '<button class="ct-sm-btn" id="ct-sel-all">✅ Select All</button>'
+    + '<button class="ct-sm-btn" id="ct-desel-all">⬜ Deselect All</button>'
+    + '<span class="ct-sel-count" id="ct-sel-count">' + res.regular.length + ' selected</span>'
+    + '</div>'
+    + '<div class="ct-vlist" id="ct-vlist">'
+    + res.regular.map(function(v, i) { return CT.videoRow(v, i); }).join('')
+    + (res.members.length ? CT.membersSection(res.members) : '')
+    + '</div>'
+    + '<div class="ct-actions">'
+    + '<button class="ct-primary-btn" id="ct-make-pl">📋 Create Playlist</button>'
+    + '<button class="ct-sec-btn" id="ct-export-btn">📥 Export CSV</button>'
+    + '</div>'
+    + (CT.history.length ? CT.historyHTML() : '')
+    + '</div></div>';
+
+  document.body.appendChild(modal);
+
+  CT.el('ct-close-pl').onclick = function() { modal.remove(); };
+  CT.el('ct-srch-toggle').onclick = function() {
+    var bar = CT.el('ct-srch-bar');
+    bar.classList.toggle('ct-hidden');
+    if (!bar.classList.contains('ct-hidden')) CT.el('ct-srch-inp').focus();
+  };
+  CT.el('ct-srch-inp').addEventListener('input', function() {
+    var q = this.value.toLowerCase();
+    document.querySelectorAll('.ct-vrow').forEach(function(row) {
+      var t = (row.querySelector('.ct-vtitle') || {}).textContent || '';
+      row.style.display = t.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+    });
+    CT.updateCount();
+  });
+  CT.el('ct-sel-all').onclick   = function() { CT.setChecks(true);  CT.updateCount(); };
+  CT.el('ct-desel-all').onclick = function() { CT.setChecks(false); CT.updateCount(); };
+  modal.addEventListener('change', function(e) { if (e.target.classList.contains('ct-chk')) CT.updateCount(); });
+  CT.el('ct-make-pl').onclick    = function() { CT.createPlaylist(); };
+  CT.el('ct-export-btn').onclick = function() { CT.exportCsv(); };
+};
+
