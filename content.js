@@ -21,230 +21,13 @@ var CT = {
 CT.route = function () {
   var path = location.pathname;
 
-  if (CT.isHomePage(path)) { CT.handleHome(); return; }
-  if (CT.isShorts(path)) { CT.handleShorts(); return; }
-  if (CT.isSearch(path)) { CT.handleSearch(); return; }
-  if (CT.isSubscriptions(path)) { CT.handleSubscriptions(); return; }
-  if (CT.isWatchPage(path)) { CT.handleWatch(); return; }
   if (CT.isChannelPage(path)) { CT.handleChannel(); return; }
 };
 
-CT.isHomePage = function (p) { return p === '/' || p === '/feed/trending'; };
-CT.isShorts = function (p) { return p.indexOf('/shorts/') === 0; };
-CT.isSearch = function (p) { return p === '/results'; };
-CT.isSubscriptions = function (p) { return p === '/feed/subscriptions'; };
-CT.isWatchPage = function (p) { return p === '/watch'; };
 CT.isChannelPage = function (p) {
   return /^\/@[^/]+(\/|$)/.test(p) || /^\/channel\/[^/]+/.test(p);
 };
 
-CT.handleHome = function () {
-  setTimeout(function () {
-    var feed = document.querySelector('ytd-browse[page-subtype="home"], ytd-rich-grid-renderer, #contents.ytd-rich-grid-renderer');
-    if (feed && !document.getElementById('ct-home-block')) {
-      feed.style.display = 'none';
-      var shorts = document.querySelectorAll('ytd-rich-section-renderer, ytd-reel-shelf-renderer');
-      shorts.forEach(function (el) { el.style.display = 'none'; });
-      CT.injectHomeMessage();
-    }
-  }, 600);
-};
-
-CT.injectHomeMessage = function () {
-  if (document.getElementById('ct-home-block')) return;
-  var wrap = document.createElement('div');
-  wrap.id = 'ct-home-block';
-  wrap.innerHTML = '<div class="ct-home-msg">'
-    + '<div class="ct-home-icon">📋</div>'
-    + '<div class="ct-home-title">Channel Timeline</div>'
-    + '<div class="ct-home-sub">The home feed is hidden for your focus.</div>'
-    + '<button class="ct-home-btn" id="ct-go-subs">Go to Subscriptions</button>'
-    + '</div>';
-  var primary = document.querySelector('#primary, ytd-page-manager');
-  if (primary) {
-    primary.insertBefore(wrap, primary.firstChild);
-  } else {
-    document.body.appendChild(wrap);
-  }
-  document.getElementById('ct-go-subs').addEventListener('click', function () {
-    window.location.href = 'https://youtube.com';
-  });
-};
-
-CT.handleShorts = function () {
-  window.location.replace('https://youtube.com');
-};
-
-CT.handleSearch = function () {
-  setTimeout(function () {
-    CT.filterSearchToChannels();
-  }, 800);
-  var obs2 = new MutationObserver(function () {
-    CT.filterSearchToChannels();
-  });
-  var results = document.querySelector('ytd-section-list-renderer');
-  if (results) obs2.observe(results, { childList: true, subtree: true });
-};
-
-CT.filterSearchToChannels = function () {
-  var items = document.querySelectorAll('ytd-item-section-renderer');
-  items.forEach(function (section) {
-    var hasChannel = section.querySelector('ytd-channel-renderer');
-    if (!hasChannel) {
-      section.style.display = 'none';
-    }
-  });
-
-  var chips = document.querySelectorAll('yt-chip-cloud-chip-renderer');
-  chips.forEach(function (chip) {
-    var txt = chip.textContent.trim().toLowerCase();
-    if (txt === 'channels') {
-      chip.click();
-    }
-  });
-
-  var shorts = document.querySelectorAll('ytd-reel-shelf-renderer, ytd-rich-section-renderer');
-  shorts.forEach(function (el) { el.style.display = 'none'; });
-};
-
-CT.handleSubscriptions = function () {
-  setTimeout(function () {
-    CT.hideSubsShorts();
-    CT.injectSubsFilter();
-  }, 700);
-};
-
-CT.hideSubsShorts = function () {
-  var items = document.querySelectorAll('ytd-rich-item-renderer, ytd-grid-video-renderer');
-  items.forEach(function (item) {
-    var link = item.querySelector('a[href]');
-    if (link && link.href && link.href.indexOf('/shorts/') !== -1) {
-      item.style.display = 'none';
-    }
-  });
-  var shelves = document.querySelectorAll('ytd-reel-shelf-renderer, ytd-rich-section-renderer');
-  shelves.forEach(function (el) { el.style.display = 'none'; });
-};
-
-CT.injectSubsFilter = function () {
-  if (document.getElementById('ct-subs-filter')) return;
-
-  var nav = document.querySelector('ytd-feed-filter-chip-bar-renderer, #chips-wrapper, yt-chip-cloud-renderer');
-  if (!nav) return;
-
-  var bar = document.createElement('div');
-  bar.id = 'ct-subs-filter';
-
-  bar.innerHTML = '<div class="ct-filter-row">'
-    + '<button class="ct-filter-btn ct-active" data-period="all">All</button>'
-    + '<button class="ct-filter-btn" data-period="7">Last 7 days</button>'
-    + '<button class="ct-filter-btn" data-period="14">Last 2 weeks</button>'
-    + '<button class="ct-filter-btn" data-period="30">Last month</button>'
-    + '<div class="ct-filter-sep"></div>'
-    + '<label class="ct-filter-check"><input type="checkbox" id="ct-show-posts" /> Posts</label>'
-    + '</div>';
-
-  nav.parentNode.insertBefore(bar, nav.nextSibling);
-
-  bar.querySelectorAll('.ct-filter-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      bar.querySelectorAll('.ct-filter-btn').forEach(function (b) { b.classList.remove('ct-active'); });
-      btn.classList.add('ct-active');
-      CT.applySubsFilter(btn.dataset.period);
-    });
-  });
-};
-
-CT.applySubsFilter = function (period) {
-  var items = document.querySelectorAll('ytd-rich-item-renderer');
-  var now = Date.now();
-  var days = period === 'all' ? 0 : parseInt(period);
-
-  items.forEach(function (item) {
-    var link = item.querySelector('a[href]');
-    if (link && link.href && link.href.indexOf('/shorts/') !== -1) {
-      item.style.display = 'none';
-      return;
-    }
-    if (days === 0) { item.style.display = ''; return; }
-    var timeEl = item.querySelector('ytd-video-meta-block #metadata-line span:last-child, span.ytd-video-meta-block');
-    if (!timeEl) { item.style.display = ''; return; }
-    var txt = timeEl.textContent.trim().toLowerCase();
-    var pass = CT.timeTextWithinDays(txt, days);
-    item.style.display = pass ? '' : 'none';
-  });
-};
-
-CT.timeTextWithinDays = function (txt, days) {
-  var n = parseInt(txt);
-  if (isNaN(n)) return true;
-  if (txt.indexOf('hour') !== -1 || txt.indexOf('minute') !== -1) return true;
-  if (txt.indexOf('day') !== -1) return n <= days;
-  if (txt.indexOf('week') !== -1) return n * 7 <= days;
-  if (txt.indexOf('month') !== -1) return false;
-  if (txt.indexOf('year') !== -1) return false;
-  return true;
-};
-
-CT.handleWatch = function () {
-  setTimeout(function () {
-    CT.hideWatchExtras();
-    CT.injectVideoControls();
-  }, 900);
-};
-
-CT.hideWatchExtras = function () {
-  var sidebar = document.querySelector('#secondary, #related');
-  if (sidebar) sidebar.style.display = 'none';
-
-  var desc = document.querySelector('ytd-video-secondary-info-renderer #description, ytd-expander');
-  if (desc) desc.style.display = 'none';
-
-  var comments = document.querySelector('ytd-comments, #comments');
-  if (comments) comments.style.display = 'none';
-
-  var shorts = document.querySelectorAll('ytd-reel-shelf-renderer, ytd-rich-section-renderer');
-  shorts.forEach(function (el) { el.style.display = 'none'; });
-};
-
-CT.injectVideoControls = function () {
-  if (document.getElementById('ct-video-controls')) return;
-
-  var below = document.querySelector('ytd-video-primary-info-renderer, #above-the-fold');
-  if (!below) return;
-
-  var ctrl = document.createElement('div');
-  ctrl.id = 'ct-video-controls';
-
-  ctrl.innerHTML = '<button class="ct-vc-btn" id="ct-toggle-desc" title="Toggle description">'
-    + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>'
-    + '</button>'
-    + '<button class="ct-vc-btn" id="ct-toggle-comments" title="Toggle comments">'
-    + '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'
-    + '</button>'
-    + '<span class="ct-vc-label">Best option</span>';
-
-  below.parentNode.insertBefore(ctrl, below.nextSibling);
-
-  var descVisible = false;
-  var commVisible = false;
-
-  document.getElementById('ct-toggle-desc').addEventListener('click', function () {
-    var desc = document.querySelector('ytd-video-secondary-info-renderer #description, ytd-expander');
-    if (!desc) return;
-    descVisible = !descVisible;
-    desc.style.display = descVisible ? '' : 'none';
-    this.classList.toggle('ct-vc-active', descVisible);
-  });
-
-  document.getElementById('ct-toggle-comments').addEventListener('click', function () {
-    var comments = document.querySelector('ytd-comments, #comments');
-    if (!comments) return;
-    commVisible = !commVisible;
-    comments.style.display = commVisible ? '' : 'none';
-    this.classList.toggle('ct-vc-active', commVisible);
-  });
-};
 
 CT.handleChannel = function () {
   var handle = CT.getHandle();
@@ -647,13 +430,13 @@ CT.saveSettings = async function (s) {
   await CT.cSet(obj);
 };
 
-CT.pushHistory = async function(entry) {
+CT.pushHistory = async function (entry) {
   CT.history.unshift(entry);
   if (CT.history.length > 50) CT.history = CT.history.slice(0, 50);
   var obj1 = {}, obj2 = {};
   obj1['ct_h_' + CT.channelId] = CT.history;
   await CT.cSet(obj1);
-  var d  = await CT.cGet('ct_history_global');
+  var d = await CT.cGet('ct_history_global');
   var gh = d['ct_history_global'] || [];
   gh.unshift(Object.assign({}, entry, { id: Date.now(), type: 'channel' }));
   if (gh.length > 200) gh.splice(200);
@@ -661,60 +444,59 @@ CT.pushHistory = async function(entry) {
   await CT.cSet(obj2);
 };
 
-CT.calcStats = function(videos) {
+CT.calcStats = function (videos) {
   if (!videos.length) return { totalHours: '0', avgViews: '0', topMonth: '—' };
-  var secs = videos.reduce(function(a, v) { return a + v.duration; }, 0);
+  var secs = videos.reduce(function (a, v) { return a + v.duration; }, 0);
   var totalHours = (secs / 3600).toFixed(1);
-  var avgViews   = CT.fmtNum(Math.round(videos.reduce(function(a, v) { return a + v.views; }, 0) / videos.length));
+  var avgViews = CT.fmtNum(Math.round(videos.reduce(function (a, v) { return a + v.views; }, 0) / videos.length));
   var mc = {};
-  videos.forEach(function(v) {
+  videos.forEach(function (v) {
     var k = new Date(v.publishedAt).toLocaleString('en-US', { month: 'short', year: 'numeric' });
     mc[k] = (mc[k] || 0) + 1;
   });
-  var topMonth = Object.entries(mc).sort(function(a, b) { return b[1] - a[1]; })[0];
+  var topMonth = Object.entries(mc).sort(function (a, b) { return b[1] - a[1]; })[0];
   return { totalHours: totalHours, avgViews: avgViews, topMonth: topMonth ? topMonth[0] : '—' };
 };
 
-CT.setChecks = function(val) {
-  document.querySelectorAll('.ct-chk').forEach(function(c) {
+CT.setChecks = function (val) {
+  document.querySelectorAll('.ct-chk').forEach(function (c) {
     if (c.closest('.ct-vrow').style.display !== 'none') c.checked = val;
   });
 };
-CT.updateCount = function() {
-  var n  = document.querySelectorAll('.ct-chk:checked').length;
+CT.updateCount = function () {
+  var n = document.querySelectorAll('.ct-chk:checked').length;
   var el = CT.el('ct-sel-count');
   if (el) el.textContent = n + ' selected';
 };
-CT.getChecked = function() {
-  return Array.from(document.querySelectorAll('.ct-chk:checked')).map(function(c) {
+CT.getChecked = function () {
+  return Array.from(document.querySelectorAll('.ct-chk:checked')).map(function (c) {
     return CT.filtered[+c.dataset.idx];
   }).filter(Boolean);
 };
-CT.parseDur = function(iso) {
+CT.parseDur = function (iso) {
   var m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
-  return (+(m[1]||0))*3600 + (+(m[2]||0))*60 + (+(m[3]||0));
+  return (+(m[1] || 0)) * 3600 + (+(m[2] || 0)) * 60 + (+(m[3] || 0));
 };
-CT.fmtDur = function(s) {
-  var h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
-  return h > 0 ? h+':'+CT.pad(m)+':'+CT.pad(sec) : m+':'+CT.pad(sec);
+CT.fmtDur = function (s) {
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? h + ':' + CT.pad(m) + ':' + CT.pad(sec) : m + ':' + CT.pad(sec);
 };
-CT.pad    = function(n) { return String(n).padStart(2,'0'); };
-CT.fmtNum = function(n) { return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(n); };
-CT.getKey = async function() { var d = await CT.cGet('ct_api_key'); return d.ct_api_key || ''; };
-CT.closeModal = function(id) { var el = document.getElementById(id); if (el) el.remove(); };
-CT.el    = function(id) { return document.getElementById(id); };
-CT.toast = function(msg, ms) {
+CT.pad = function (n) { return String(n).padStart(2, '0'); };
+CT.fmtNum = function (n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n); };
+CT.getKey = async function () { var d = await CT.cGet('ct_api_key'); return d.ct_api_key || ''; };
+CT.closeModal = function (id) { var el = document.getElementById(id); if (el) el.remove(); };
+CT.el = function (id) { return document.getElementById(id); };
+CT.toast = function (msg, ms) {
   var old = document.getElementById('ct-toast');
   if (old) old.remove();
-  var t  = document.createElement('div');
-  t.id   = 'ct-toast'; t.textContent = msg;
+  var t = document.createElement('div');
+  t.id = 'ct-toast'; t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(function() { t.remove(); }, ms || 2500);
+  setTimeout(function () { t.remove(); }, ms || 2500);
 };
-CT.cGet = function(key) { return new Promise(function(r) { chrome.storage.local.get(key, r); }); };
-CT.cSet = function(obj) { return new Promise(function(r) { chrome.storage.local.set(obj, r); }); };
-CT.esc  = function(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+CT.cGet = function (key) { return new Promise(function (r) { chrome.storage.local.get(key, r); }); };
+CT.cSet = function (obj) { return new Promise(function (r) { chrome.storage.local.set(obj, r); }); };
+CT.esc = function (s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 };
-

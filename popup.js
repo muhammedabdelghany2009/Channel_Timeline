@@ -21,11 +21,15 @@ store.get('ct_api_key').then(d => {
     if (d.ct_api_key) apikeyInput.value = d.ct_api_key;
 });
 
+let saveTimer = null;
 apikeyInput.addEventListener('input', () => {
     const key = apikeyInput.value.trim();
+    clearTimeout(saveTimer);
     if (key.length > 10) {
-        store.set({ ct_api_key: key });
-        showSt('✅ Key saved', 'ok');
+        saveTimer = setTimeout(async () => {
+            await store.set({ ct_api_key: key });
+            showSt('✅ Key saved', 'ok');
+        }, 600);
     }
 });
 
@@ -40,11 +44,11 @@ $p('test-key-btn').addEventListener('click', async () => {
     if (!key) { showSt('❌ Enter a key first', 'err'); return; }
     showSt('⏳ Testing…', 'ok');
     try {
-        const res = await fetch('https://googleapis.com' + key);
+        const res = await fetch('https://www.googleapis.com/youtube/v3/videos?part=id&id=dQw4w9WgXcQ&key=' + key);
         const data = await res.json();
         if (data.error) throw new Error(data.error.message);
-        showSt('✅ Key is working!', 'ok');
         await store.set({ ct_api_key: key });
+        showSt('✅ Key is working!', 'ok');
     } catch (e) {
         showSt('❌ ' + e.message, 'err');
     }
@@ -53,13 +57,21 @@ $p('test-key-btn').addEventListener('click', async () => {
 function showSt(msg, type) {
     statusBar.textContent = msg;
     statusBar.className = 'key-status-bar ' + type;
-    if (type === 'ok') setTimeout(() => statusBar.classList.add('hidden'), 2000);
+    if (type === 'ok') setTimeout(() => statusBar.classList.add('hidden'), 2500);
 }
+
 let mergerLinks = [];
 const mergerInput = $p('merger-input');
 const mergerList = $p('merger-list');
 const mergeBtn = $p('merge-btn');
 const mergerRes = $p('merger-result');
+
+store.get('ct_merger_links').then(d => {
+    if (d.ct_merger_links && d.ct_merger_links.length) {
+        mergerLinks = d.ct_merger_links;
+        renderMerger();
+    }
+});
 
 $p('merger-add-btn').addEventListener('click', addLink);
 mergerInput.addEventListener('keydown', e => { if (e.key === 'Enter') addLink(); });
@@ -72,6 +84,7 @@ async function addLink() {
     if (mergerLinks.find(l => l.url === raw)) { showMErr('⚠️ This link is already in the list'); return; }
     mergerLinks.push({ url: raw, ...parsed });
     mergerInput.value = '';
+    await store.set({ ct_merger_links: mergerLinks.map(l => ({ url: l.url, type: l.type, id: l.id, label: l.label })) });
     renderMerger();
 }
 
@@ -81,7 +94,7 @@ function parseYtUrl(url) {
         const listId = u.searchParams.get('list');
         if (listId) return { type: 'playlist', id: listId, label: 'Playlist: ' + listId.slice(0, 16) + '…' };
         let vid = u.searchParams.get('v');
-        if (!vid && u.hostname === 'youtu.be') vid = u.pathname.slice(1);
+        if (!vid && u.hostname === 'youtu.be') vid = u.pathname.slice(1).split('?')[0];
         if (vid) return { type: 'video', id: vid, label: 'Video: ' + vid };
     } catch { }
     return null;
@@ -102,16 +115,18 @@ function renderMerger() {
     mergerLinks.forEach((item, idx) => {
         const div = document.createElement('div');
         div.className = 'merger-item';
-        div.innerHTML = '<span class="merger-item-icon">' + (item.type === 'playlist' ? '📋' : '▶️') + '</span>'
-            + '<span class="merger-item-label">' + esc(item.label) + '</span>'
-            + '<span class="merger-item-count" id="mc-' + idx + '">…</span>'
-            + '<button class="merger-item-del" data-idx="' + idx + '">✕</button>';
+        div.innerHTML =
+            '<span class="merger-item-icon">' + (item.type === 'playlist' ? '📋' : '▶️') + '</span>' +
+            '<span class="merger-item-label">' + esc(item.label) + '</span>' +
+            '<span class="merger-item-count" id="mc-' + idx + '">…</span>' +
+            '<button class="merger-item-del" data-idx="' + idx + '">✕</button>';
         mergerList.appendChild(div);
     });
 
     mergerList.querySelectorAll('.merger-item-del').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', async () => {
             mergerLinks.splice(+btn.dataset.idx, 1);
+            await store.set({ ct_merger_links: mergerLinks.map(l => ({ url: l.url, type: l.type, id: l.id, label: l.label })) });
             renderMerger();
         });
     });
@@ -119,7 +134,6 @@ function renderMerger() {
     const has = mergerLinks.length > 0;
     mergeBtn.disabled = !has;
     $p('merger-name-wrap').style.display = has ? 'block' : 'none';
-    mergerRes.classList.add('hidden');
     if (has) resolveCounts();
 }
 
@@ -138,9 +152,9 @@ async function resolveCounts() {
                 item.videoIds = ids;
                 el.textContent = ids.length + ' videos';
             } else {
-                el.textContent = key ? '?' : 'Need API Key';
+                el.textContent = key ? '?' : 'needs API Key';
             }
-        } catch { el.textContent = 'Error'; }
+        } catch { el.textContent = 'error'; }
     }
 }
 
@@ -148,7 +162,7 @@ async function fetchPlIds(key, plId) {
     const ids = [];
     let token = '';
     do {
-        const r = await fetch('https://googleapis.com' + plId + '&maxResults=50&pageToken=' + token + '&key=' + key);
+        const r = await fetch('https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=' + plId + '&maxResults=50&pageToken=' + token + '&key=' + key);
         const d = await r.json();
         if (d.error) throw new Error(d.error.message);
         for (const item of (d.items || [])) {
@@ -166,10 +180,10 @@ $p('merge-btn').addEventListener('click', async () => {
         if (item.videoIds?.length) allIds = allIds.concat(item.videoIds);
     }
     allIds = [...new Set(allIds)];
-    if (!allIds.length) { showMErr('❌ No videos found — save your API Key first'); return; }
+    if (!allIds.length) { showMErr('❌ No videos found — make sure your API Key is saved'); return; }
 
     const name = $p('merger-name').value.trim() || 'Merged Playlist';
-    const url = 'https://youtube.com' + allIds.join(',') + '&title=' + encodeURIComponent(name);
+    const url = 'https://www.youtube.com/watch_videos?video_ids=' + allIds.join(',') + '&title=' + encodeURIComponent(name);
 
     $p('result-url').value = url;
     $p('open-result-btn').href = url;
@@ -181,6 +195,8 @@ $p('merge-btn').addEventListener('click', async () => {
         setTimeout(() => { $p('copy-result-btn').textContent = '📋'; }, 2000);
     };
 
+    $p('mr-close-btn').onclick = () => { mergerRes.classList.add('hidden'); };
+
     await saveHistory({ name, url, count: allIds.length, type: 'merger', date: new Date().toLocaleDateString('en-GB'), sources: mergerLinks.map(l => l.url) });
     renderHistory();
 });
@@ -189,7 +205,9 @@ document.querySelectorAll('.dl-copy-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const code = document.getElementById(btn.dataset.target);
         if (!code) return;
-        navigator.clipboard.writeText(code.textContent);
+        const txt = code.textContent
+            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+        navigator.clipboard.writeText(txt);
         btn.textContent = '✅';
         setTimeout(() => { btn.textContent = '📋'; }, 2000);
     });
